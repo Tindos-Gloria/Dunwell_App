@@ -15,7 +15,7 @@ const mapRow = (r: Record<string, unknown>) => ({
   time: r["StartTime"] ? new Date(r["StartTime"] as string).toISOString().slice(11, 16) : "",
   start_time: r["StartTime"] ?? null,
   end_time: r["EndTime"] ?? null,
-  type: (r["AppointType"] as string) || "inclinic",
+  type: r["Booking_Type"] === "Online_Virtual" ? "virtual" : "inclinic",
   booking_type: (r["Booking_Type"] as string) || null,
   nurse_id: r["UserID"] ? String(r["UserID"]) : null,
   nurse_name: (r["NurseName"] as string) || null,

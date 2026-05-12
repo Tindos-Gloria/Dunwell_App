@@ -421,8 +421,8 @@ const PatientPortal = () => {
                       </div>
                     )}
 
-                    {/* Medication delivery — choose method */}
-                    {["completed","OutPatient"].includes(a.status) && a.delivery == null && (
+                    {/* Medication delivery — choose method (only when nurse prescribed medication) */}
+                    {["completed","OutPatient"].includes(a.status) && a.delivery == null && !!a.medication && (
                       <div className="mt-4 p-4 rounded-xl bg-[#1a365d]/5 border border-[#1a365d]/10">
                         <p className="text-sm font-semibold text-[#1a365d] mb-2.5">How would you like your medication?</p>
                         <div className="flex gap-2 flex-wrap">
