@@ -46,7 +46,7 @@ const PatientPortal = () => {
   const catalogue = useCatalogue();
 
   const [mode, setMode] = useState<BookMode>(null);
-  const [apptTab, setApptTab] = useState<"upcoming" | "past">("upcoming");
+  const [apptTab, setApptTab] = useState<"upcoming" | "current" | "past">("upcoming");
   // Virtual booking
   const [serviceId, setServiceId] = useState("");
   const [slotId, setSlotId] = useState("");
@@ -246,12 +246,18 @@ const PatientPortal = () => {
     pdf.save(fname);
   };
 
-  const upcoming = apps.filter((a) => ["pending", "confirmed", "InPatient"].includes(a.status));
-  const past = apps.filter((a) => ["completed", "OutPatient", "cancelled"].includes(a.status));
-  const shownApps = apptTab === "upcoming" ? upcoming : past;
+  // Current = today's appointments (any non-cancelled status)
+  const current = apps.filter((a) => a.date === today && a.status !== "cancelled");
+  // Upcoming = future dates, active status only
+  const upcoming = apps.filter((a) => a.date > today && ["pending", "confirmed", "InPatient"].includes(a.status));
+  // Past = completed/OutPatient before today + all cancelled
+  const past = apps.filter((a) =>
+    (["completed", "OutPatient"].includes(a.status) && a.date < today) ||
+    a.status === "cancelled"
+  );
 
   const statCards = [
-    { label: "Upcoming", value: upcoming.length, icon: Clock, color: "text-[#1a365d]", bg: "bg-[#1a365d]/10" },
+    { label: "Upcoming", value: upcoming.length + current.filter(a => ["pending","confirmed","InPatient"].includes(a.status)).length, icon: Clock, color: "text-[#1a365d]", bg: "bg-[#1a365d]/10" },
     { label: "Completed", value: past.filter((a) => ["completed","OutPatient"].includes(a.status)).length, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50" },
     { label: "Documents", value: documents.length, icon: FileText, color: "text-purple-600", bg: "bg-purple-50" },
     { label: "Total visits", value: apps.length, icon: Activity, color: "text-[#b45309]", bg: "bg-amber-50" },
@@ -324,15 +330,25 @@ const PatientPortal = () => {
 
           {/* ── Appointments Tab ── */}
           <TabsContent value="appointments" className="mt-6 space-y-4">
-            {/* Sub-tab: Upcoming / Past */}
-            <div className="flex items-center gap-3">
-              {(["upcoming", "past"] as const).map((t) => (
+            {/* Sub-tabs: Upcoming / Current / Past */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {([
+                { key: "upcoming", label: `Upcoming (${upcoming.length})` },
+                { key: "current",  label: `Current${current.length > 0 ? ` (${current.length})` : ""}`, highlight: current.length > 0 },
+                { key: "past",     label: `Past (${past.length})` },
+              ] as { key: "upcoming"|"current"|"past"; label: string; highlight?: boolean }[]).map((t) => (
                 <button
-                  key={t}
-                  onClick={() => setApptTab(t)}
-                  className={`px-5 py-2 rounded-xl font-semibold text-sm transition-all ${apptTab === t ? "bg-[#1a365d] text-white shadow-md" : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-200"}`}
+                  key={t.key}
+                  onClick={() => setApptTab(t.key)}
+                  className={`px-5 py-2 rounded-xl font-semibold text-sm transition-all ${
+                    apptTab === t.key
+                      ? "bg-[#1a365d] text-white shadow-md"
+                      : t.highlight
+                        ? "bg-[#fbbf24]/20 text-[#b45309] border border-[#fbbf24]/50 hover:bg-[#fbbf24]/30"
+                        : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-200"
+                  }`}
                 >
-                  {t === "upcoming" ? `Upcoming (${upcoming.length})` : `Past (${past.length})`}
+                  {t.label}
                 </button>
               ))}
             </div>
@@ -351,7 +367,7 @@ const PatientPortal = () => {
               </Card>
             )}
 
-            {/* ── UPCOMING: full interactive cards ── */}
+            {/* ── UPCOMING: future appointments, no delivery/rating ── */}
             {apptTab === "upcoming" && upcoming.map((a) => {
               const sc = statusConfig[a.status] ?? statusConfig.pending;
               const StatusIcon = sc.icon;
@@ -372,7 +388,7 @@ const PatientPortal = () => {
                             <Badge variant="outline" className={`${sc.cls} font-semibold text-[10px] px-2 py-0.5 flex items-center gap-1`}>
                               <StatusIcon className="h-2.5 w-2.5" /> {sc.label}
                             </Badge>
-                            {isVirtual && !a.paid && a.status !== "cancelled" && (
+                            {isVirtual && !a.paid && (
                               <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px] px-2 py-0.5 flex items-center gap-1">
                                 <AlertCircle className="h-2.5 w-2.5" /> Unpaid
                               </Badge>
@@ -387,7 +403,7 @@ const PatientPortal = () => {
                         </div>
                       </div>
                       <div className="flex gap-2 flex-wrap items-center shrink-0">
-                        {isVirtual && !a.paid && a.status !== "cancelled" && (
+                        {isVirtual && !a.paid && (
                           <Button size="sm" className="bg-[#fbbf24] text-[#1a365d] hover:bg-[#f59e0b] rounded-xl font-bold" onClick={() => { setPayTab("card"); setPayOpen(a); }}>
                             <CreditCard className="h-3.5 w-3.5 mr-1" /> Pay R{a.price}
                           </Button>
@@ -412,12 +428,84 @@ const PatientPortal = () => {
                         </Button>
                       </div>
                     </div>
+                  </div>
+                </Card>
+              );
+            })}
 
-                    {/* Visit summary — shown before delivery */}
-                    {(a.diagnosis || a.health_education || a.follow_up_date) && (
+            {/* ── CURRENT: today's appointments — delivery + rating live here ── */}
+            {apptTab === "current" && current.length === 0 && (
+              <Card className="p-14 text-center border-dashed border-2 border-slate-200 rounded-2xl bg-white">
+                <div className="w-16 h-16 rounded-2xl bg-[#fbbf24]/20 flex items-center justify-center mx-auto mb-4">
+                  <Clock className="h-8 w-8 text-[#fbbf24]" />
+                </div>
+                <p className="font-bold text-[#1a365d] text-lg">No appointments today</p>
+                <p className="text-sm text-slate-400 mt-1">Appointments scheduled for today will appear here.</p>
+              </Card>
+            )}
+
+            {apptTab === "current" && current.map((a) => {
+              const sc = statusConfig[a.status] ?? statusConfig.pending;
+              const StatusIcon = sc.icon;
+              const isVirtual = a.type === "virtual";
+              const isCompleted = ["completed","OutPatient"].includes(a.status);
+              return (
+                <Card key={a.id} className="overflow-hidden border-0 shadow-md bg-white rounded-2xl ring-1 ring-[#fbbf24]/30">
+                  {/* Amber top bar for today */}
+                  <div className="h-2 w-full bg-gradient-to-r from-[#fbbf24] to-amber-300" />
+                  <div className="p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex gap-4 flex-1 min-w-0">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${isVirtual ? "bg-[#1a365d]" : "bg-[#fbbf24]"}`}>
+                          {isVirtual ? <Video className="text-white h-5 w-5" /> : <Building2 className="text-[#1a365d] h-5 w-5" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <h3 className="font-bold text-[#1a365d] text-base leading-tight">{a.service_name}</h3>
+                            <Badge variant="outline" className={`${sc.cls} font-semibold text-[10px] px-2 py-0.5 flex items-center gap-1`}>
+                              <StatusIcon className="h-2.5 w-2.5" /> {sc.label}
+                            </Badge>
+                            <Badge className="bg-[#fbbf24]/20 text-[#b45309] border-[#fbbf24]/40 text-[10px] font-bold px-2 py-0.5">Today</Badge>
+                            {isVirtual && !a.paid && (
+                              <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px] px-2 py-0.5 flex items-center gap-1">
+                                <AlertCircle className="h-2.5 w-2.5" /> Unpaid
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-500">
+                            {a.time && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {a.time}</span>}
+                            <span className="font-bold text-[#1a365d]">R{a.price}</span>
+                            {a.nurse_name && <span className="text-slate-400">{a.nurse_name}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-wrap items-center shrink-0">
+                        {isVirtual && !a.paid && (
+                          <Button size="sm" className="bg-[#fbbf24] text-[#1a365d] hover:bg-[#f59e0b] rounded-xl font-bold" onClick={() => { setPayTab("card"); setPayOpen(a); }}>
+                            <CreditCard className="h-3.5 w-3.5 mr-1" /> Pay R{a.price}
+                          </Button>
+                        )}
+                        {a.zoom_link && a.status === "confirmed" && (
+                          <Button size="sm" className="bg-[#1a365d] text-white hover:bg-[#1a365d]/90 rounded-xl font-semibold" asChild>
+                            <a href={a.zoom_link} target="_blank" rel="noreferrer"><Video className="h-3.5 w-3.5 mr-1" /> Join Zoom</a>
+                          </Button>
+                        )}
+                        {["pending", "confirmed", "InPatient"].includes(a.status) && (
+                          <Button size="sm" variant="outline" className="rounded-xl border-red-200 text-red-600 hover:bg-red-50" onClick={() => cancelAppointment(a)}>
+                            Cancel
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-600 hover:border-[#1a365d]/20 hover:text-[#1a365d]" onClick={() => setDetailOpen(a)}>
+                          Details <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Visit summary — shown once nurse completes the visit */}
+                    {(a.diagnosis || a.health_education || a.follow_up_date || a.medication) && (
                       <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
                         <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
-                          <Activity className="h-3.5 w-3.5" /> {isVirtual ? "Outpatient Visit Summary" : "Visit Summary"}
+                          <Activity className="h-3.5 w-3.5" /> Visit Summary
                         </div>
                         {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
                         {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
@@ -426,8 +514,8 @@ const PatientPortal = () => {
                       </div>
                     )}
 
-                    {/* Medication delivery */}
-                    {["completed","OutPatient"].includes(a.status) && a.delivery == null && !!a.medication && (
+                    {/* Medication delivery — only after visit completed */}
+                    {isCompleted && a.delivery == null && !!a.medication && (
                       <div className="mt-4 p-4 rounded-xl bg-[#1a365d]/5 border border-[#1a365d]/10">
                         <p className="text-sm font-semibold text-[#1a365d] mb-2.5">How would you like your medication?</p>
                         <div className="flex gap-2 flex-wrap">
@@ -459,7 +547,8 @@ const PatientPortal = () => {
                       </div>
                     )}
 
-                    {a.medication_received && a.rating == null && (
+                    {/* Rating — appears once medication received (or no medication + completed) */}
+                    {isCompleted && (a.medication_received || !a.medication) && a.rating == null && (
                       <div className="mt-4 flex items-center justify-between p-4 rounded-xl bg-[#fbbf24]/10 border border-[#fbbf24]/30">
                         <div className="text-sm font-semibold text-[#b45309]">How was your visit?</div>
                         <Button size="sm" className="bg-[#fbbf24] text-[#1a365d] hover:bg-[#f59e0b] rounded-xl font-bold" onClick={() => setRateOpen(a)}>
