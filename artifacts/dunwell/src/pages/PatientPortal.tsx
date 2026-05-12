@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import {
   Calendar, CreditCard, Pill, Star, Video, Truck, MapPin, FileText, Sparkles,
   Clock, CheckCircle2, Building2, Download, FileHeart, Heart, Stethoscope, Activity,
-  ChevronRight, AlertCircle, XCircle, UserCheck,
+  ChevronRight, AlertCircle, XCircle, UserCheck, ClipboardList, RefreshCw,
 } from "lucide-react";
 import { generateSickNotePDF, generatePrescriptionPDF, generateReferralLetterPDF } from "@/lib/pdfGenerator";
 
@@ -75,6 +75,9 @@ const PatientPortal = () => {
   const [deliveryType, setDeliveryType] = useState<"collect" | "courier" | null>(null);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  // Follow-up booking
+  const [followUpOpen, setFollowUpOpen] = useState<Appointment | null>(null);
+  const [followUpTime, setFollowUpTime] = useState("09:00");
 
   useEffect(() => {
     if (!loading && !profile) navigate("/auth");
@@ -202,6 +205,35 @@ const PatientPortal = () => {
     setRateOpen(null); setRating(5); setFeedback("");
   };
 
+  const bookFollowUp = async () => {
+    if (!followUpOpen || !followUpTime) { toast.error("Please select a time"); return; }
+    if (!followUpOpen.follow_up_date) { toast.error("No follow-up date set"); return; }
+    try {
+      const consultPrice = displayServices.find((s) =>
+        s.name.toLowerCase().includes("consult")
+      )?.price ?? 250;
+      await store.createAppointment({
+        patient_id: profile!.id,
+        patient_name: fullName,
+        service_id: "followup-consultation",
+        service_name: "Follow-Up Consultation",
+        price: consultPrice,
+        date: followUpOpen.follow_up_date,
+        time: followUpTime,
+        start_time: `${followUpOpen.follow_up_date}T${followUpTime}:00`,
+        type: followUpOpen.type,
+        nurse_id: followUpOpen.nurse_id ?? null,
+        nurse_name: followUpOpen.nurse_name ?? null,
+        payment_method: followUpOpen.type === "virtual" ? "online" : "cash",
+        is_student: followUpOpen.is_student ?? false,
+        status: followUpOpen.type === "inclinic" ? "InPatient" : "pending",
+      });
+      toast.success(`Follow-up booked for ${new Date(followUpOpen.follow_up_date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })} at ${followUpTime}`);
+      setFollowUpOpen(null);
+      setFollowUpTime("09:00");
+    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "Failed to book follow-up"); }
+  };
+
   const downloadDoc = async (d: MedicalDocument) => {
     const patientInfo = { name: profile.name, surname: profile.surname || "", dob: profile.dob || "", email: profile.email || "" };
     const [nFirst, ...nRest] = (d.nurse_name || "").split(" ");
@@ -279,6 +311,7 @@ const PatientPortal = () => {
           <TabsList className="bg-white border border-slate-200 shadow-sm rounded-2xl p-1 gap-1 flex-wrap h-auto">
             {[
               { value: "appointments", label: "My Appointments", icon: Calendar },
+              { value: "summaries", label: `Visit Summaries${apps.filter(a => ["completed","OutPatient"].includes(a.status) && (a.diagnosis || a.medication)).length > 0 ? ` (${apps.filter(a => ["completed","OutPatient"].includes(a.status) && (a.diagnosis || a.medication)).length})` : ""}`, icon: ClipboardList },
               { value: "documents", label: `Documents${documents.length > 0 ? ` (${documents.length})` : ""}`, icon: FileText },
               { value: "catalogue", label: "Services", icon: Stethoscope },
               { value: "campaigns", label: "Campaigns", icon: Sparkles },
@@ -304,38 +337,31 @@ const PatientPortal = () => {
               ))}
             </div>
 
-            {shownApps.length === 0 && (
+            {apptTab === "upcoming" && upcoming.length === 0 && (
               <Card className="p-14 text-center border-dashed border-2 border-slate-200 rounded-2xl bg-white">
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
                   <Calendar className="h-8 w-8 text-slate-300" />
                 </div>
-                <p className="font-bold text-[#1a365d] text-lg">{apptTab === "upcoming" ? "No upcoming appointments" : "No past appointments"}</p>
-                <p className="text-sm text-slate-400 mb-5 mt-1">
-                  {apptTab === "upcoming" ? "Book your first appointment to get started." : "Completed and cancelled appointments will appear here."}
-                </p>
-                {apptTab === "upcoming" && (
-                  <div className="flex justify-center gap-2">
-                    <Button className="bg-[#1a365d] text-white rounded-xl" onClick={() => setMode("virtual")}><Video className="mr-1.5 h-4 w-4" /> Book Virtual</Button>
-                    <Button variant="outline" className="border-[#1a365d]/30 text-[#1a365d] rounded-xl" onClick={() => setMode("inclinic")}><Building2 className="mr-1.5 h-4 w-4" /> In-Clinic</Button>
-                  </div>
-                )}
+                <p className="font-bold text-[#1a365d] text-lg">No upcoming appointments</p>
+                <p className="text-sm text-slate-400 mb-5 mt-1">Book your first appointment to get started.</p>
+                <div className="flex justify-center gap-2">
+                  <Button className="bg-[#1a365d] text-white rounded-xl" onClick={() => setMode("virtual")}><Video className="mr-1.5 h-4 w-4" /> Book Virtual</Button>
+                  <Button variant="outline" className="border-[#1a365d]/30 text-[#1a365d] rounded-xl" onClick={() => setMode("inclinic")}><Building2 className="mr-1.5 h-4 w-4" /> In-Clinic</Button>
+                </div>
               </Card>
             )}
 
-            {shownApps.map((a) => {
+            {/* ── UPCOMING: full interactive cards ── */}
+            {apptTab === "upcoming" && upcoming.map((a) => {
               const sc = statusConfig[a.status] ?? statusConfig.pending;
               const StatusIcon = sc.icon;
               const isVirtual = a.type === "virtual";
               const dateStr = a.date ? new Date(a.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" }) : "";
-
               return (
                 <Card key={a.id} className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all bg-white rounded-2xl">
-                  {/* Color top strip */}
                   <div className={`h-1.5 w-full ${isVirtual ? "bg-gradient-to-r from-[#1a365d] to-blue-400" : "bg-gradient-to-r from-[#fbbf24] to-amber-400"}`} />
-
                   <div className="p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      {/* Left: icon + info */}
                       <div className="flex gap-4 flex-1 min-w-0">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${isVirtual ? "bg-[#1a365d]" : "bg-[#fbbf24]"}`}>
                           {isVirtual ? <Video className="text-white h-5 w-5" /> : <Building2 className="text-[#1a365d] h-5 w-5" />}
@@ -353,19 +379,13 @@ const PatientPortal = () => {
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-500">
-                            {dateStr && (
-                              <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {dateStr}</span>
-                            )}
-                            {a.time && (
-                              <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {a.time}</span>
-                            )}
+                            {dateStr && <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {dateStr}</span>}
+                            {a.time && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {a.time}</span>}
                             <span className="font-bold text-[#1a365d]">R{a.price}</span>
                             {a.nurse_name && <span className="text-slate-400">{a.nurse_name}</span>}
                           </div>
                         </div>
                       </div>
-
-                      {/* Right: actions */}
                       <div className="flex gap-2 flex-wrap items-center shrink-0">
                         {isVirtual && !a.paid && a.status !== "cancelled" && (
                           <Button size="sm" className="bg-[#fbbf24] text-[#1a365d] hover:bg-[#f59e0b] rounded-xl font-bold" onClick={() => { setPayTab("card"); setPayOpen(a); }}>
@@ -393,35 +413,20 @@ const PatientPortal = () => {
                       </div>
                     </div>
 
-                    {/* Visit summary */}
+                    {/* Visit summary — shown before delivery */}
                     {(a.diagnosis || a.health_education || a.follow_up_date) && (
                       <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
                         <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
-                          <Activity className="h-3.5 w-3.5" />
-                          {isVirtual ? "Outpatient Visit Summary" : "Visit Summary"}
+                          <Activity className="h-3.5 w-3.5" /> {isVirtual ? "Outpatient Visit Summary" : "Visit Summary"}
                         </div>
-                        {a.diagnosis && (
-                          <p className="text-sm">
-                            <span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span>
-                            <span className="text-slate-700">{a.diagnosis}</span>
-                          </p>
-                        )}
-                        {a.health_education && (
-                          <p className="text-sm">
-                            <span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span>
-                            <span className="text-slate-600">{a.health_education}</span>
-                          </p>
-                        )}
-                        {a.follow_up_date && (
-                          <p className="text-sm">
-                            <span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span>
-                            <span className="text-slate-600">{a.follow_up_date}</span>
-                          </p>
-                        )}
+                        {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
+                        {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                        {a.medication && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
+                        {a.follow_up_date && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>}
                       </div>
                     )}
 
-                    {/* Medication delivery — choose method (only when nurse prescribed medication) */}
+                    {/* Medication delivery */}
                     {["completed","OutPatient"].includes(a.status) && a.delivery == null && !!a.medication && (
                       <div className="mt-4 p-4 rounded-xl bg-[#1a365d]/5 border border-[#1a365d]/10">
                         <p className="text-sm font-semibold text-[#1a365d] mb-2.5">How would you like your medication?</p>
@@ -449,12 +454,8 @@ const PatientPortal = () => {
                             <Pill className="h-3.5 w-3.5 mr-1" /> I received it
                           </Button>
                         </div>
-                        {a.delivery_date && (
-                          <p className="text-xs text-emerald-600 flex items-center gap-1"><Calendar className="h-3 w-3" /> {a.delivery === "collect" ? "Collection date" : "Delivery date"}: {a.delivery_date}</p>
-                        )}
-                        {a.delivery === "courier" && a.delivery_address && (
-                          <p className="text-xs text-emerald-600 flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.delivery_address}</p>
-                        )}
+                        {a.delivery_date && <p className="text-xs text-emerald-600 flex items-center gap-1"><Calendar className="h-3 w-3" /> {a.delivery === "collect" ? "Collection date" : "Delivery date"}: {a.delivery_date}</p>}
+                        {a.delivery === "courier" && a.delivery_address && <p className="text-xs text-emerald-600 flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.delivery_address}</p>}
                       </div>
                     )}
 
@@ -475,6 +476,206 @@ const PatientPortal = () => {
                           ))}
                         </div>
                         <span>{a.feedback || "Rated"}</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+
+            {/* ── PAST: read-only summary cards ── */}
+            {apptTab === "past" && past.length === 0 && (
+              <Card className="p-14 text-center border-dashed border-2 border-slate-200 rounded-2xl bg-white">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <Clock className="h-8 w-8 text-slate-300" />
+                </div>
+                <p className="font-bold text-[#1a365d] text-lg">No past appointments</p>
+                <p className="text-sm text-slate-400 mt-1">Completed and cancelled appointments will appear here.</p>
+              </Card>
+            )}
+
+            {apptTab === "past" && past.filter((a) => ["completed","OutPatient"].includes(a.status)).map((a) => {
+              const sc = statusConfig[a.status] ?? statusConfig.pending;
+              const StatusIcon = sc.icon;
+              const isVirtual = a.type === "virtual";
+              const dateStr = a.date ? new Date(a.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" }) : "";
+              return (
+                <Card key={a.id} className="overflow-hidden border-0 shadow-sm bg-white rounded-2xl opacity-90">
+                  <div className={`h-1 w-full ${isVirtual ? "bg-blue-200" : "bg-amber-200"}`} />
+                  <div className="p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                      <div className="flex gap-3 flex-1 min-w-0">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isVirtual ? "bg-[#1a365d]/10" : "bg-amber-50"}`}>
+                          {isVirtual ? <Video className="text-[#1a365d] h-4 w-4" /> : <Building2 className="text-amber-600 h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <h3 className="font-bold text-[#1a365d] text-sm leading-tight">{a.service_name}</h3>
+                            <Badge variant="outline" className={`${sc.cls} font-semibold text-[10px] px-2 py-0.5 flex items-center gap-1`}>
+                              <StatusIcon className="h-2.5 w-2.5" /> {sc.label}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-400">
+                            {dateStr && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {dateStr}</span>}
+                            {a.time && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {a.time}</span>}
+                            <span className="font-semibold text-[#1a365d]">R{a.price}</span>
+                            {a.nurse_name && <span>{a.nurse_name}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-500 text-xs" onClick={() => setDetailOpen(a)}>
+                        Details <ChevronRight className="h-3 w-3 ml-0.5" />
+                      </Button>
+                    </div>
+
+                    {/* Visit summary — read-only */}
+                    {(a.diagnosis || a.health_education || a.medication || a.follow_up_date) && (
+                      <div className={`p-4 rounded-xl border space-y-1.5 ${isVirtual ? "bg-blue-50/50 border-blue-100" : "bg-emerald-50/50 border-emerald-100"}`}>
+                        <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-2 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
+                          <ClipboardList className="h-3.5 w-3.5" /> Visit Summary
+                        </div>
+                        {a.diagnosis && <p className="text-xs"><span className="font-semibold text-slate-700">Diagnosis: </span><span className="text-slate-600">{a.diagnosis}</span></p>}
+                        {a.health_education && <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                        {a.medication && <p className="text-xs"><span className="font-semibold text-slate-700">Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
+                        {a.delivery && (
+                          <p className="text-xs"><span className="font-semibold text-slate-700">{a.delivery === "collect" ? "Collection" : "Courier"}: </span>
+                          <span className="text-slate-600">{a.delivery_date || ""}{a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}</span></p>
+                        )}
+                        {a.follow_up_date && (
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 mt-1">
+                            <p className="text-xs"><span className="font-semibold text-slate-700">Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>
+                            <Button size="sm" className="bg-[#1a365d] text-white rounded-xl text-xs h-7 px-3 hover:bg-[#1a365d]/90"
+                              onClick={() => { setFollowUpOpen(a); setFollowUpTime("09:00"); }}>
+                              <RefreshCw className="h-3 w-3 mr-1" /> Book Follow-Up
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {a.rating != null && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`h-3 w-3 ${i < a.rating! ? "fill-[#fbbf24] text-[#fbbf24]" : "text-slate-200"}`} />
+                          ))}
+                        </div>
+                        <span>{a.feedback || "Rated"}</span>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+
+            {/* Cancelled appointments in past — minimal display */}
+            {apptTab === "past" && past.filter((a) => a.status === "cancelled").map((a) => {
+              const dateStr = a.date ? new Date(a.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" }) : "";
+              return (
+                <Card key={a.id} className="p-4 border-0 rounded-2xl bg-slate-50 border border-slate-100 opacity-60">
+                  <div className="flex items-center gap-3">
+                    <XCircle className="h-4 w-4 text-slate-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold text-slate-500 text-sm">{a.service_name}</span>
+                      <span className="text-xs text-slate-400 ml-2">{dateStr}</span>
+                    </div>
+                    <Badge variant="outline" className="bg-slate-100 text-slate-400 border-slate-200 text-[10px]">Cancelled</Badge>
+                  </div>
+                </Card>
+              );
+            })}
+          </TabsContent>
+
+          {/* ── Visit Summaries Tab ── */}
+          <TabsContent value="summaries" className="mt-6 space-y-4">
+            {apps.filter((a) => ["completed","OutPatient"].includes(a.status) && (a.diagnosis || a.medication || a.health_education)).length === 0 && (
+              <Card className="p-14 text-center border-dashed border-2 border-slate-200 rounded-2xl bg-white">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <ClipboardList className="h-8 w-8 text-slate-300" />
+                </div>
+                <p className="font-bold text-[#1a365d] text-lg">No visit summaries yet</p>
+                <p className="text-sm text-slate-400 mt-1">After a consultation, your clinical notes will appear here.</p>
+              </Card>
+            )}
+
+            {apps.filter((a) => ["completed","OutPatient"].includes(a.status) && (a.diagnosis || a.medication || a.health_education)).map((a) => {
+              const isVirtual = a.type === "virtual";
+              const dateStr = a.date ? new Date(a.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "";
+              return (
+                <Card key={a.id} className="overflow-hidden border-0 shadow-sm hover:shadow-md transition-all bg-white rounded-2xl">
+                  <div className={`h-1.5 w-full ${isVirtual ? "bg-gradient-to-r from-[#1a365d] to-blue-400" : "bg-gradient-to-r from-emerald-500 to-emerald-300"}`} />
+                  <div className="p-6">
+                    {/* Header */}
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                      <div className="flex gap-4 flex-1 min-w-0">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${isVirtual ? "bg-[#1a365d]" : "bg-emerald-600"}`}>
+                          <ClipboardList className="text-white h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-[#1a365d] text-base">{a.service_name}</h3>
+                          <div className="flex items-center gap-2 text-sm text-slate-400 mt-0.5 flex-wrap">
+                            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {dateStr}</span>
+                            {a.time && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {a.time}</span>}
+                            {a.nurse_name && <span>· {a.nurse_name}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {a.rating != null && (
+                        <div className="flex gap-0.5 items-center shrink-0">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`h-4 w-4 ${i < a.rating! ? "fill-[#fbbf24] text-[#fbbf24]" : "text-slate-200"}`} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Clinical info grid */}
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {a.diagnosis && (
+                        <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+                          <div className="text-xs font-bold uppercase tracking-wide text-blue-600 mb-1.5 flex items-center gap-1"><Activity className="h-3.5 w-3.5" /> Diagnosis</div>
+                          <p className="text-sm text-slate-700">{a.diagnosis}</p>
+                        </div>
+                      )}
+                      {a.health_education && (
+                        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+                          <div className="text-xs font-bold uppercase tracking-wide text-emerald-600 mb-1.5 flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> Health Education</div>
+                          <p className="text-sm text-slate-700">{a.health_education}</p>
+                        </div>
+                      )}
+                      {a.medication && (
+                        <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
+                          <div className="text-xs font-bold uppercase tracking-wide text-amber-600 mb-1.5 flex items-center gap-1"><Pill className="h-3.5 w-3.5" /> Medication</div>
+                          <p className="text-sm text-slate-700">{a.medication}</p>
+                          {a.delivery && (
+                            <div className="mt-2 pt-2 border-t border-amber-100 flex items-center gap-1.5 text-xs text-amber-700 font-medium">
+                              {a.delivery === "collect" ? <MapPin className="h-3.5 w-3.5" /> : <Truck className="h-3.5 w-3.5" />}
+                              {a.delivery === "collect" ? "Collect" : "Courier"}{a.delivery_date ? ` · ${a.delivery_date}` : ""}{a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}
+                              {a.medication_received && <Badge className="ml-auto bg-emerald-100 text-emerald-700 border-0 text-[10px]">Received</Badge>}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {a.follow_up_date && (
+                        <div className="p-4 rounded-xl bg-purple-50 border border-purple-100">
+                          <div className="text-xs font-bold uppercase tracking-wide text-purple-600 mb-1.5 flex items-center gap-1"><RefreshCw className="h-3.5 w-3.5" /> Follow-Up</div>
+                          <p className="text-sm text-slate-700 mb-3">{a.follow_up_date}</p>
+                          {!upcoming.some((u) => u.service_name === "Follow-Up Consultation" && u.date === a.follow_up_date) ? (
+                            <Button size="sm" className="w-full bg-[#1a365d] text-white rounded-xl hover:bg-[#1a365d]/90 font-semibold text-xs h-8"
+                              onClick={() => { setFollowUpOpen(a); setFollowUpTime("09:00"); }}>
+                              <RefreshCw className="h-3 w-3 mr-1.5" /> Book Follow-Up Appointment
+                            </Button>
+                          ) : (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Follow-up booked</Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {a.notes && (
+                      <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-1.5">Treatment Notes</div>
+                        <p className="text-sm text-slate-600">{a.notes}</p>
                       </div>
                     )}
                   </div>
@@ -880,6 +1081,79 @@ const PatientPortal = () => {
             <Button variant="ghost" onClick={() => setRateOpen(null)}>Skip</Button>
             <Button className="bg-[#fbbf24] text-[#1a365d] font-black rounded-xl" onClick={submitRating}>
               <Heart className="h-4 w-4 mr-1.5 fill-current" /> Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Follow-Up Booking dialog ─── */}
+      <Dialog open={!!followUpOpen} onOpenChange={(o) => !o && setFollowUpOpen(null)}>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#1a365d]">
+              <RefreshCw className="h-5 w-5 text-[#fbbf24]" /> Book Follow-Up Appointment
+            </DialogTitle>
+            <DialogDescription>
+              {followUpOpen?.service_name} follow-up · scheduled for {followUpOpen?.follow_up_date
+                ? new Date(followUpOpen.follow_up_date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })
+                : ""
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* Pre-filled summary */}
+            <div className="p-4 rounded-xl bg-[#1a365d]/5 border border-[#1a365d]/10 space-y-2 text-sm">
+              <div className="text-xs font-bold uppercase tracking-wide text-[#1a365d] mb-2">Appointment Details</div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Service</span>
+                <span className="font-semibold text-[#1a365d]">Follow-Up Consultation</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Type</span>
+                <span className="font-semibold text-[#1a365d] capitalize">{followUpOpen?.type === "virtual" ? "Virtual" : "In-Clinic"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Date</span>
+                <span className="font-semibold text-[#1a365d]">
+                  {followUpOpen?.follow_up_date
+                    ? new Date(followUpOpen.follow_up_date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" })
+                    : ""}
+                </span>
+              </div>
+              {followUpOpen?.nurse_name && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Nurse</span>
+                  <span className="font-semibold text-[#1a365d]">{followUpOpen.nurse_name}</span>
+                </div>
+              )}
+              {followUpOpen?.diagnosis && (
+                <div className="pt-2 border-t border-slate-200/60">
+                  <span className="text-slate-500 text-xs">Reason: </span>
+                  <span className="text-slate-700 text-xs">{followUpOpen.diagnosis}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Time picker */}
+            <div>
+              <Label className="text-xs font-semibold uppercase text-slate-500">Preferred Time *</Label>
+              <Input
+                type="time"
+                min="07:00"
+                max="17:00"
+                value={followUpTime}
+                onChange={(e) => setFollowUpTime(e.target.value)}
+                className="mt-1 rounded-xl h-11"
+              />
+              <p className="text-xs text-slate-400 mt-1.5">Clinic hours: 07:00 – 17:00</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setFollowUpOpen(null)}>Cancel</Button>
+            <Button className="bg-[#1a365d] text-white rounded-xl font-bold hover:bg-[#1a365d]/90" onClick={bookFollowUp}>
+              <RefreshCw className="h-4 w-4 mr-1.5" /> Confirm Follow-Up
             </Button>
           </DialogFooter>
         </DialogContent>
