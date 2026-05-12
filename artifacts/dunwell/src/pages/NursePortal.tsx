@@ -536,8 +536,17 @@ const GroupSection = ({
                     {a.time && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{a.time}</span>}
                     <span className="font-semibold text-[#1a365d]">R{a.price}</span>
                   </div>
+                  {a.diagnosis && (
+                    <p className="text-xs text-slate-500 mt-1"><span className="font-semibold">Diagnoses:</span> {a.diagnosis}</p>
+                  )}
+                  {a.health_education && (
+                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Health Education:</span> {a.health_education}</p>
+                  )}
+                  {a.follow_up_date && (
+                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Follow-Up:</span> {a.follow_up_date}</p>
+                  )}
                   {a.medication && (
-                    <p className="text-xs text-slate-500 mt-1"><span className="font-semibold">Medication:</span> {a.medication}</p>
+                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Medication:</span> {a.medication}</p>
                   )}
                   {a.delivery && (
                     <p className="text-xs text-slate-500 mt-0.5">

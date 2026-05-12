@@ -132,14 +132,11 @@ const PatientPortal = () => {
     }
     const nurse = nurses.find((n) => n.id === icNurse);
     const startTime = `${icDate}T${icTime}:00`;
-    const endDate = new Date(startTime);
-    endDate.setMinutes(endDate.getMinutes() + 30);
-    const endTime = endDate.toISOString().slice(0, 19);
     try {
       await store.createAppointment({
         patient_id: profile.id, patient_name: fullName,
         service_id: icServiceData.id, service_name: icServiceData.name, price: icPrice,
-        date: icDate, time: icTime, start_time: startTime, end_time: endTime,
+        date: icDate, time: icTime, start_time: startTime, end_time: null,
         type: "inclinic", nurse_id: nurse?.id ?? null,
         nurse_name: nurse ? `${nurse.name}${nurse.surname ? " " + nurse.surname : ""}` : null,
         payment_method: icPayment, is_student: icStudent,
@@ -208,7 +205,8 @@ const PatientPortal = () => {
   const downloadDoc = async (d: MedicalDocument) => {
     const patientInfo = { name: profile.name, surname: profile.surname || "", dob: profile.dob || "", email: profile.email || "" };
     const [nFirst, ...nRest] = (d.nurse_name || "").split(" ");
-    const nurseInfo = { name: nFirst || "Nurse", surname: nRest.join(" "), sancNumber: "DUNWELL" };
+    const storedSig = (d.data as { signatureDataUrl?: string | null }).signatureDataUrl ?? null;
+    const nurseInfo = { name: nFirst || "Nurse", surname: nRest.join(" "), sancNumber: "DUNWELL", signatureDataUrl: storedSig };
     let pdf, fname: string;
     if (d.type === "sick_note") { pdf = await generateSickNotePDF(patientInfo, nurseInfo, d.data as unknown as Parameters<typeof generateSickNotePDF>[2]); fname = `SickNote_${d.patient_name}.pdf`; }
     else if (d.type === "prescription") { pdf = await generatePrescriptionPDF(patientInfo, nurseInfo, String((d.data as { text?: unknown }).text ?? "")); fname = `Prescription_${d.patient_name}.pdf`; }

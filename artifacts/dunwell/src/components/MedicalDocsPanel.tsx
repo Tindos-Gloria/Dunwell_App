@@ -76,17 +76,17 @@ export const MedicalDocsPanel = ({ nurse, preselectedPatientId }: { nurse: Profi
       let filename: string | undefined;
       if (kind === "sick_note") {
         pdf = await generateSickNotePDF(patientInfo, nurseInfo, sn);
-        data = sn;
+        data = { ...sn, signatureDataUrl: signatureDataUrl ?? null };
         filename = `SickNote_${patientName}.pdf`;
       } else if (kind === "prescription") {
         if (!rx.trim()) { toast.error("Enter prescription"); setBusy(false); return; }
         pdf = await generatePrescriptionPDF(patientInfo, nurseInfo, rx);
-        data = { text: rx };
+        data = { text: rx, signatureDataUrl: signatureDataUrl ?? null };
         filename = `Prescription_${patientName}.pdf`;
       } else if (kind === "referral") {
         if (!ref.trim()) { toast.error("Enter clinical notes"); setBusy(false); return; }
         pdf = await generateReferralLetterPDF(patientInfo, nurseInfo, ref);
-        data = { notes: ref };
+        data = { notes: ref, signatureDataUrl: signatureDataUrl ?? null };
         filename = `ReferralLetter_${patientName}.pdf`;
       } else { setBusy(false); return; }
 
