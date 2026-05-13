@@ -1060,7 +1060,7 @@ const PatientPortal = () => {
                   <MapPin className="h-4 w-4 text-[#fbbf24]" /> Visit us at
                 </div>
                 <div className="text-slate-600">38 De Beer Street, Braamfontein, Johannesburg</div>
-                <div className="text-slate-500 text-xs">Mon – Fri: 08:00 – 17:00 · Sat: 08:00 – 13:00</div>
+                <div className="text-slate-500 text-xs">Mon – Fri: 09:00 – 17:00 · Sat: 09:00 – 13:00</div>
               </div>
             </div>
           </div>

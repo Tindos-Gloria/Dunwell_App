@@ -7,6 +7,7 @@ const CLINIC_TEL = "Tel: 072 176 0247";
 const CLINIC_EMAIL = "Email: admin@dunwellyouthpriority.co.za";
 
 const LOGO_URL = "/dunwell-logo.jpeg";
+const STAMP_URL = "/dunwell-stamp.jpg";
 
 const colors = {
   navy: { r: 26, g: 54, b: 93 },
@@ -39,17 +40,18 @@ const setDrawColor = (doc: jsPDF, c: { r: number; g: number; b: number }) => doc
 const setFillColor = (doc: jsPDF, c: { r: number; g: number; b: number }) => doc.setFillColor(c.r, c.g, c.b);
 
 let cachedLogoDataUrl: string | null = null;
+let cachedStampDataUrl: string | null = null;
 
-async function loadLogo(): Promise<string | null> {
-  if (cachedLogoDataUrl) return cachedLogoDataUrl;
+async function loadImage(url: string, cache: { value: string | null }): Promise<string | null> {
+  if (cache.value) return cache.value;
   try {
-    const res = await fetch(LOGO_URL);
+    const res = await fetch(url);
     const blob = await res.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        cachedLogoDataUrl = reader.result as string;
-        resolve(cachedLogoDataUrl);
+        cache.value = reader.result as string;
+        resolve(cache.value);
       };
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
@@ -57,6 +59,21 @@ async function loadLogo(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+const logoCache = { value: null as string | null };
+const stampCache = { value: null as string | null };
+
+async function loadLogo(): Promise<string | null> {
+  const result = await loadImage(LOGO_URL, logoCache);
+  cachedLogoDataUrl = result;
+  return result;
+}
+
+async function loadStamp(): Promise<string | null> {
+  const result = await loadImage(STAMP_URL, stampCache);
+  cachedStampDataUrl = result;
+  return result;
 }
 
 const addProfessionalHeader = async (doc: jsPDF): Promise<number> => {
@@ -184,7 +201,7 @@ const addProfessionalFooter = (doc: jsPDF, docType: string) => {
   doc.rect(0, pageHeight - 4, pageWidth, 4, "F");
 };
 
-const signatureBlock = (doc: jsPDF, nurse: NurseInfo, yIn: number) => {
+const signatureBlock = async (doc: jsPDF, nurse: NurseInfo, yIn: number) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   let y = yIn;
@@ -218,10 +235,20 @@ const signatureBlock = (doc: jsPDF, nurse: NurseInfo, yIn: number) => {
   doc.setLineWidth(0.8);
   doc.line(margin + 5, y + boxHeight - 6, margin + boxWidth - 5, y + boxHeight - 6);
 
-  // If we have a real signature image, embed it
+  // Embed nurse signature if available
   if (nurse.signatureDataUrl) {
     try {
       doc.addImage(nurse.signatureDataUrl, "PNG", margin + 2, y + 2, boxWidth - 4, boxHeight - 4);
+    } catch { /* ignore */ }
+  }
+
+  // Embed clinic stamp image inside the Official Stamp box
+  const stampData = await loadStamp();
+  if (stampData) {
+    try {
+      const stampX = pageWidth - margin - boxWidth;
+      const padding = 2;
+      doc.addImage(stampData, "JPEG", stampX + padding, y + padding, boxWidth - padding * 2, boxHeight - padding * 2);
     } catch { /* ignore */ }
   }
 };
@@ -277,7 +304,7 @@ export const generateSickNotePDF = async (patient: PatientInfo, nurse: NurseInfo
   );
   y += 14;
 
-  signatureBlock(doc, nurse, y);
+  await signatureBlock(doc, nurse, y);
   addProfessionalFooter(doc, "SN");
   return doc;
 };
@@ -340,7 +367,7 @@ export const generatePrescriptionPDF = async (patient: PatientInfo, nurse: Nurse
   doc.text("Follow prescribed medication as directed. Consult a pharmacist for questions.", margin, y);
   y += 8;
 
-  signatureBlock(doc, nurse, y);
+  await signatureBlock(doc, nurse, y);
   addProfessionalFooter(doc, "RX");
   return doc;
 };
@@ -409,7 +436,7 @@ export const generateReferralLetterPDF = async (patient: PatientInfo, nurse: Nur
   doc.text("Thank you for your attention to this referral. Kind regards,", margin, y);
   y += 8;
 
-  signatureBlock(doc, nurse, y);
+  await signatureBlock(doc, nurse, y);
   addProfessionalFooter(doc, "REF");
   return doc;
 };
