@@ -49,6 +49,8 @@ export interface Appointment {
   paid: boolean;
   zoom_link?: string | null;
   notes?: string | null;
+  examination?: string | null;
+  history?: string | null;
   diagnosis?: string | null;
   health_education?: string | null;
   follow_up_date?: string | null;

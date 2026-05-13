@@ -501,13 +501,16 @@ const PatientPortal = () => {
                       </div>
                     </div>
 
-                    {/* Visit summary — shown once nurse completes the visit */}
-                    {(a.diagnosis || a.health_education || a.follow_up_date || a.medication) && (
+                    {/* Visit summary — auto-populated from Visit table once OutPatient */}
+                    {(a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.follow_up_date || a.medication) && (
                       <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
                         <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
                           <Activity className="h-3.5 w-3.5" /> Visit Summary
                         </div>
+                        {a.examination && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Examination: </span><span className="text-slate-700">{a.examination}</span></p>}
+                        {a.history && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>History: </span><span className="text-slate-700">{a.history}</span></p>}
                         {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
+                        {a.notes && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
                         {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
                         {a.medication && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
                         {a.follow_up_date && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>}
@@ -617,13 +620,16 @@ const PatientPortal = () => {
                       </Button>
                     </div>
 
-                    {/* Visit summary — read-only */}
-                    {(a.diagnosis || a.health_education || a.medication || a.follow_up_date) && (
+                    {/* Visit summary — read-only from Visit table */}
+                    {(a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.medication || a.follow_up_date) && (
                       <div className={`p-4 rounded-xl border space-y-1.5 ${isVirtual ? "bg-blue-50/50 border-blue-100" : "bg-emerald-50/50 border-emerald-100"}`}>
                         <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-2 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
                           <ClipboardList className="h-3.5 w-3.5" /> Visit Summary
                         </div>
+                        {a.examination && <p className="text-xs"><span className="font-semibold text-slate-700">Examination: </span><span className="text-slate-600">{a.examination}</span></p>}
+                        {a.history && <p className="text-xs"><span className="font-semibold text-slate-700">History: </span><span className="text-slate-600">{a.history}</span></p>}
                         {a.diagnosis && <p className="text-xs"><span className="font-semibold text-slate-700">Diagnosis: </span><span className="text-slate-600">{a.diagnosis}</span></p>}
+                        {a.notes && <p className="text-xs"><span className="font-semibold text-slate-700">Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
                         {a.health_education && <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
                         {a.medication && <p className="text-xs"><span className="font-semibold text-slate-700">Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
                         {a.delivery && (
@@ -720,10 +726,28 @@ const PatientPortal = () => {
 
                     {/* Clinical info grid */}
                     <div className="grid sm:grid-cols-2 gap-3">
+                      {a.examination && (
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Examination</div>
+                          <p className="text-sm text-slate-700">{a.examination}</p>
+                        </div>
+                      )}
+                      {a.history && (
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> History</div>
+                          <p className="text-sm text-slate-700">{a.history}</p>
+                        </div>
+                      )}
                       {a.diagnosis && (
                         <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
                           <div className="text-xs font-bold uppercase tracking-wide text-blue-600 mb-1.5 flex items-center gap-1"><Activity className="h-3.5 w-3.5" /> Diagnosis</div>
                           <p className="text-sm text-slate-700">{a.diagnosis}</p>
+                        </div>
+                      )}
+                      {a.notes && (
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-1.5 flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5" /> Treatment</div>
+                          <p className="text-sm text-slate-700">{a.notes}</p>
                         </div>
                       )}
                       {a.health_education && (

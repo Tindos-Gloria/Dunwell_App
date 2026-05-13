@@ -32,6 +32,8 @@ const mapRow = (r: Record<string, unknown>) => ({
   paid: Boolean(r["Paid"]),
   zoom_link: (r["ZoomLink"] as string) || null,
   notes: (r["Treatment"] as string) || null,
+  examination: (r["Examination"] as string) || null,
+  history: (r["History"] as string) || null,
   diagnosis: (r["Diagnoses"] as string) || null,
   health_education: (r["Health_Education"] as string) || null,
   follow_up_date: (r["FollowUp_Plan"] as string) || null,
@@ -54,7 +56,7 @@ const BASE_QUERY = `
       pu.Name + ' ' + ISNULL(pu.Surname,'')
     ) as PatientName,
     NULL as AppointType,
-    v.Diagnoses, v.Treatment, v.Health_Education, v.FollowUp_Plan,
+    v.Examination, v.History, v.Diagnoses, v.Treatment, v.Health_Education, v.FollowUp_Plan,
     v.Medication, v.Delivery_Type, v.Delivery_Date, v.Delivery_Address, v.Medication_Received
   FROM Appointments a
   LEFT JOIN Users u  ON a.UserID    = u.UserID

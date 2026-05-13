@@ -519,6 +519,8 @@ const GroupSection = ({
 
       {items.map((a) => {
         const sc = statusConfig[a.status] ?? statusConfig.pending;
+        const isOutPatient = a.status === "OutPatient" || a.status === "completed";
+        const hasVisitData = isOutPatient && (a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.medication || a.follow_up_date || a.delivery);
         const dateStr = a.date ? new Date(a.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" }) : "";
         return (
           <Card key={a.id} className={`overflow-hidden border-0 rounded-2xl transition-all ${muted ? "shadow-none bg-slate-50/60" : "shadow-sm bg-white hover:shadow-md"}`}>
@@ -536,30 +538,65 @@ const GroupSection = ({
                     {a.time && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{a.time}</span>}
                     <span className="font-semibold text-[#1a365d]">R{a.price}</span>
                   </div>
-                  {a.diagnosis && (
-                    <p className="text-xs text-slate-500 mt-1"><span className="font-semibold">Diagnoses:</span> {a.diagnosis}</p>
-                  )}
-                  {a.health_education && (
-                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Health Education:</span> {a.health_education}</p>
-                  )}
-                  {a.follow_up_date && (
-                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Follow-Up:</span> {a.follow_up_date}</p>
-                  )}
-                  {a.medication && (
-                    <p className="text-xs text-slate-500 mt-0.5"><span className="font-semibold">Medication:</span> {a.medication}</p>
-                  )}
-                  {a.delivery && (
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      <span className="font-semibold">{a.delivery === "collect" ? "Collection" : "Courier"}:</span>{" "}
-                      {a.delivery_date || ""}
-                      {a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}
-                    </p>
-                  )}
                 </div>
                 <div className="shrink-0">
-                  {actions(a)}
+                  {/* OutPatient: no Complete Visit button — read-only info only */}
+                  {isOutPatient ? (
+                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-semibold">
+                      {a.rating ? `${a.rating}★ Rated` : "Visit Complete"}
+                    </Badge>
+                  ) : actions(a)}
                 </div>
               </div>
+
+              {/* Full Visit Summary — auto-populated from Visit table when OutPatient */}
+              {hasVisitData && (
+                <div className="mt-3 p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 flex items-center gap-1.5 mb-2">
+                    <Stethoscope className="h-3 w-3" /> Visit Summary
+                  </p>
+                  {a.examination && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Examination: </span><span className="text-slate-600">{a.examination}</span></p>
+                  )}
+                  {a.history && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">History: </span><span className="text-slate-600">{a.history}</span></p>
+                  )}
+                  {a.diagnosis && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Diagnoses: </span><span className="text-slate-600">{a.diagnosis}</span></p>
+                  )}
+                  {a.notes && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Treatment: </span><span className="text-slate-600">{a.notes}</span></p>
+                  )}
+                  {a.health_education && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>
+                  )}
+                  {a.medication && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Medication: </span><span className="text-slate-600">{a.medication}</span></p>
+                  )}
+                  {a.follow_up_date && (
+                    <p className="text-xs"><span className="font-semibold text-slate-700">Follow-Up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>
+                  )}
+                  {a.delivery && (
+                    <p className="text-xs">
+                      <span className="font-semibold text-slate-700">{a.delivery === "collect" ? "Collection" : "Courier"}: </span>
+                      <span className="text-slate-600">{a.delivery_date || ""}{a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}</span>
+                    </p>
+                  )}
+                  {a.medication_received && (
+                    <p className="text-xs text-emerald-700 font-semibold mt-1">✓ Medication received by patient</p>
+                  )}
+                </div>
+              )}
+
+              {/* Non-OutPatient inline info (pending/confirmed/InPatient) */}
+              {!isOutPatient && (a.diagnosis || a.health_education || a.follow_up_date || a.medication) && (
+                <div className="mt-2 space-y-0.5">
+                  {a.diagnosis && <p className="text-xs text-slate-500"><span className="font-semibold">Diagnoses:</span> {a.diagnosis}</p>}
+                  {a.health_education && <p className="text-xs text-slate-500"><span className="font-semibold">Health Education:</span> {a.health_education}</p>}
+                  {a.follow_up_date && <p className="text-xs text-slate-500"><span className="font-semibold">Follow-Up:</span> {a.follow_up_date}</p>}
+                  {a.medication && <p className="text-xs text-slate-500"><span className="font-semibold">Medication:</span> {a.medication}</p>}
+                </div>
+              )}
             </div>
           </Card>
         );
