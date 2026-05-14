@@ -33,7 +33,7 @@ const NursePortal = () => {
   const allApps = useAppointments({ allForNurse: true });
   const slots = useSlots({ nurseId: profile?.id });
 
-  const [slotForm, setSlotForm] = useState({ date: "", start_time: "09:00", end_time: "12:00" });
+  const [slotForm, setSlotForm] = useState({ date: "", start_time: "09:00", end_time: "12:00", slot_type: "virtual" as "virtual" | "inclinic" });
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [zoomLink, setZoomLink] = useState("");
   const [notes, setNotes] = useState({ diagnosis: "", notes: "", health_education: "", follow_up_date: "", medication: "" });
@@ -53,9 +53,12 @@ const NursePortal = () => {
     try {
       await store.addSlot({ ...slotForm, nurse_id: profile.id, nurse_name: profile.name });
       toast.success("Slot added");
-      setSlotForm({ date: "", start_time: "09:00", end_time: "12:00" });
+      setSlotForm({ date: "", start_time: "09:00", end_time: "12:00", slot_type: slotForm.slot_type });
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "An error occurred"); }
   };
+
+  const virtualSlots = slots.filter((s) => !s.slot_type || s.slot_type === "virtual");
+  const inclinicSlots = slots.filter((s) => s.slot_type === "inclinic");
 
   const openZoom = (a: Appointment) => {
     setEditing(a); setEditingMode("zoom");
@@ -321,14 +324,30 @@ const NursePortal = () => {
           </TabsContent>
 
           {/* ── Availability ── */}
-          <TabsContent value="availability" className="space-y-4 mt-6">
+          <TabsContent value="availability" className="space-y-5 mt-6">
+            {/* Add slot form */}
             <Card className="p-6 border-0 shadow-sm rounded-2xl bg-white">
-              <h3 className="font-bold mb-5 flex items-center gap-2 text-[#1a365d]">
+              <h3 className="font-bold mb-4 flex items-center gap-2 text-[#1a365d]">
                 <div className="w-8 h-8 rounded-xl bg-[#fbbf24] flex items-center justify-center">
                   <Plus className="h-4 w-4 text-[#1a365d]" />
                 </div>
                 Add Availability Slot
               </h3>
+              {/* Slot type toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setSlotForm({ ...slotForm, slot_type: "virtual" })}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-all border ${slotForm.slot_type === "virtual" ? "bg-[#1a365d] text-white border-[#1a365d]" : "bg-white text-slate-500 border-slate-200 hover:border-[#1a365d]/30"}`}
+                >
+                  <Video className="h-4 w-4" /> Virtual Slot
+                </button>
+                <button
+                  onClick={() => setSlotForm({ ...slotForm, slot_type: "inclinic" })}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-all border ${slotForm.slot_type === "inclinic" ? "bg-[#fbbf24] text-[#1a365d] border-[#fbbf24]" : "bg-white text-slate-500 border-slate-200 hover:border-[#fbbf24]/40"}`}
+                >
+                  <Building2 className="h-4 w-4" /> In-Clinic Slot
+                </button>
+              </div>
               <div className="grid md:grid-cols-4 gap-3">
                 <div>
                   <Label className="text-xs font-semibold uppercase text-slate-500">Date</Label>
@@ -343,39 +362,76 @@ const NursePortal = () => {
                   <Input type="time" value={slotForm.end_time} onChange={(e) => setSlotForm({ ...slotForm, end_time: e.target.value })} className="mt-1 rounded-xl" />
                 </div>
                 <div className="flex items-end">
-                  <Button className="w-full bg-[#1a365d] text-white hover:bg-[#1a365d]/90 rounded-xl font-bold" onClick={addSlot}>
-                    <Plus className="h-4 w-4 mr-1" /> Add Slot
+                  <Button
+                    className={`w-full rounded-xl font-bold ${slotForm.slot_type === "inclinic" ? "bg-[#fbbf24] text-[#1a365d] hover:bg-[#f59e0b]" : "bg-[#1a365d] text-white hover:bg-[#1a365d]/90"}`}
+                    onClick={addSlot}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Add {slotForm.slot_type === "inclinic" ? "In-Clinic" : "Virtual"} Slot
                   </Button>
                 </div>
               </div>
             </Card>
 
-            <div className="space-y-2">
-              {slots.length === 0 && (
-                <Card className="p-12 text-center border-dashed border-2 border-slate-200 rounded-2xl bg-white">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                    <Calendar className="h-7 w-7 text-slate-300" />
+            <div className="grid lg:grid-cols-2 gap-5">
+              {/* Virtual Slots */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold uppercase tracking-wide text-blue-700 bg-blue-50 border-blue-100">
+                  <Video className="h-3.5 w-3.5" />
+                  <span>Virtual Booking Slots</span>
+                  <Badge className="ml-auto bg-white/50 text-blue-700 border-0 font-bold text-[10px] px-2">{virtualSlots.length}</Badge>
+                </div>
+                {virtualSlots.length === 0 && (
+                  <div className="text-xs px-4 py-3 rounded-xl bg-white border border-slate-100 text-slate-400">
+                    No virtual slots added yet
                   </div>
-                  <p className="font-bold text-slate-500">No availability slots set yet</p>
-                  <p className="text-xs text-slate-400 mt-1">Add a slot above so patients can book virtual appointments.</p>
-                </Card>
-              )}
-              {slots.map((s) => (
-                <Card key={s.id} className="p-4 flex justify-between items-center border-0 shadow-sm rounded-2xl bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-[#1a365d]/10 flex items-center justify-center">
-                      <Calendar className="text-[#1a365d] h-5 w-5" />
+                )}
+                {virtualSlots.map((s) => (
+                  <Card key={s.id} className="p-4 flex justify-between items-center border-0 shadow-sm rounded-2xl bg-white hover:shadow-md transition-all">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-[#1a365d]/10 flex items-center justify-center">
+                        <Video className="text-[#1a365d] h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-[#1a365d]">{new Date(s.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })}</div>
+                        <div className="text-sm text-slate-400">{s.start_time} – {s.end_time}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="font-bold text-[#1a365d]">{new Date(s.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })}</div>
-                      <div className="text-sm text-slate-400">{s.start_time} – {s.end_time}</div>
-                    </div>
+                    <Button variant="ghost" size="icon" className="text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl" onClick={() => store.removeSlot(s.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+
+              {/* In-Clinic Slots */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border-amber-100">
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>In-Clinic Booking Slots</span>
+                  <Badge className="ml-auto bg-white/50 text-amber-700 border-0 font-bold text-[10px] px-2">{inclinicSlots.length}</Badge>
+                </div>
+                {inclinicSlots.length === 0 && (
+                  <div className="text-xs px-4 py-3 rounded-xl bg-white border border-slate-100 text-slate-400">
+                    No in-clinic slots added yet
                   </div>
-                  <Button variant="ghost" size="icon" className="text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl" onClick={() => store.removeSlot(s.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </Card>
-              ))}
+                )}
+                {inclinicSlots.map((s) => (
+                  <Card key={s.id} className="p-4 flex justify-between items-center border-0 shadow-sm rounded-2xl bg-white hover:shadow-md transition-all">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-[#fbbf24]/20 flex items-center justify-center">
+                        <Building2 className="text-[#b45309] h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-[#1a365d]">{new Date(s.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })}</div>
+                        <div className="text-sm text-slate-400">{s.start_time} – {s.end_time}</div>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl" onClick={() => store.removeSlot(s.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </Card>
+                ))}
+              </div>
             </div>
           </TabsContent>
 

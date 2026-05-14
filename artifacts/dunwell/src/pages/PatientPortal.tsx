@@ -53,8 +53,7 @@ const PatientPortal = () => {
   const [vTime, setVTime] = useState("");
   // In-clinic booking
   const [icService, setIcService] = useState("");
-  const [icNurse, setIcNurse] = useState("");
-  const [icDate, setIcDate] = useState("");
+  const [icSlotId, setIcSlotId] = useState("");
   const [icTime, setIcTime] = useState("09:00");
   const [icPayment, setIcPayment] = useState<PaymentMethod>("cash");
   const [icStudent, setIcStudent] = useState(false);
@@ -93,6 +92,11 @@ const PatientPortal = () => {
   const selectedSlot = useMemo(() => slots.find((s) => s.id === slotId), [slots, slotId]);
   useEffect(() => { if (selectedSlot) setVTime(selectedSlot.start_time); }, [selectedSlot]);
 
+  const virtualSlots = useMemo(() => slots.filter((s) => !s.slot_type || s.slot_type === "virtual"), [slots]);
+  const inclinicSlots = useMemo(() => slots.filter((s) => s.slot_type === "inclinic"), [slots]);
+  const selectedIcSlot = useMemo(() => inclinicSlots.find((s) => s.id === icSlotId), [inclinicSlots, icSlotId]);
+  useEffect(() => { if (selectedIcSlot) setIcTime(selectedIcSlot.start_time); }, [selectedIcSlot]);
+
   const icServiceData = useMemo(() => displayServices.find((s) => s.id === icService), [displayServices, icService]);
   const STUDENT_PRICE = 50;
   const icPrice = useMemo(() => {
@@ -127,26 +131,24 @@ const PatientPortal = () => {
 
   const submitInClinic = async () => {
     if (!icServiceData) { toast.error("Please select a service"); return; }
-    if (!icNurse) { toast.error("Please select a nurse"); return; }
-    if (!icDate) { toast.error("Please select a date"); return; }
+    if (!icSlotId || !selectedIcSlot) { toast.error("Please select an available in-clinic slot"); return; }
     if (!icTime) { toast.error("Please select a time"); return; }
     if (icPayment === "medical-aid" && (!ma.name || !ma.number || !ma.option || !ma.mainMember || !ma.mainMemberId)) {
       toast.error("Please fill in all medical aid fields"); return;
     }
-    const nurse = nurses.find((n) => n.id === icNurse);
-    const startTime = `${icDate}T${icTime}:00`;
+    const startTime = `${selectedIcSlot.date}T${icTime}:00`;
     try {
       await store.createAppointment({
         patient_id: profile.id, patient_name: fullName,
         service_id: icServiceData.id, service_name: icServiceData.name, price: icPrice,
-        date: icDate, time: icTime, start_time: startTime, end_time: null,
-        type: "inclinic", nurse_id: nurse?.id ?? null,
-        nurse_name: nurse ? `${nurse.name}${nurse.surname ? " " + nurse.surname : ""}` : null,
+        date: selectedIcSlot.date, time: icTime, start_time: startTime, end_time: null,
+        type: "inclinic", nurse_id: selectedIcSlot.nurse_id ?? null,
+        nurse_name: selectedIcSlot.nurse_name ?? null,
         payment_method: icPayment, is_student: icStudent,
         medical_aid: icPayment === "medical-aid" ? ma : null, status: "InPatient",
       });
-      toast.success(`Booked for ${new Date(icDate + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })} at ${icTime}. See you at reception!`);
-      setMode(null); setIcService(""); setIcNurse(""); setIcDate(""); setIcTime("09:00"); setIcPayment("cash"); setIcStudent(false);
+      toast.success(`Booked for ${new Date(selectedIcSlot.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })} at ${icTime}. See you at reception!`);
+      setMode(null); setIcService(""); setIcSlotId(""); setIcTime("09:00"); setIcPayment("cash"); setIcStudent(false);
       setMa({ name: "", number: "", option: "", mainMember: "", mainMemberId: "" });
     } catch (err: unknown) { toast.error(err instanceof Error ? err.message : "An error occurred"); }
   };
@@ -502,23 +504,36 @@ const PatientPortal = () => {
                     </div>
 
                     {/* Visit summary — auto-populated from Visit table once OutPatient */}
-                    {(a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.follow_up_date || a.medication) && (
-                      <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
-                        <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
-                          <Activity className="h-3.5 w-3.5" /> Visit Summary
-                        </div>
-                        {a.examination && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Examination: </span><span className="text-slate-700">{a.examination}</span></p>}
-                        {a.history && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>History: </span><span className="text-slate-700">{a.history}</span></p>}
-                        {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
-                        {a.notes && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
-                        {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
-                        {a.medication && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
-                        {a.follow_up_date && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>}
-                      </div>
-                    )}
+                    {a.status === "OutPatient"
+                      ? (a.diagnosis || a.notes || a.health_education || a.follow_up_date) && (
+                          <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
+                            <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
+                              <Activity className="h-3.5 w-3.5" /> Visit Summary
+                            </div>
+                            {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
+                            {a.notes && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
+                            {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                            {a.follow_up_date && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>}
+                          </div>
+                        )
+                      : (a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.follow_up_date || a.medication) && (
+                          <div className={`mt-4 p-4 rounded-xl border space-y-2 ${isVirtual ? "bg-blue-50/60 border-blue-100" : "bg-emerald-50/60 border-emerald-100"}`}>
+                            <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
+                              <Activity className="h-3.5 w-3.5" /> Visit Summary
+                            </div>
+                            {a.examination && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Examination: </span><span className="text-slate-700">{a.examination}</span></p>}
+                            {a.history && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>History: </span><span className="text-slate-700">{a.history}</span></p>}
+                            {a.diagnosis && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Diagnosis: </span><span className="text-slate-700">{a.diagnosis}</span></p>}
+                            {a.notes && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
+                            {a.health_education && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                            {a.medication && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
+                            {a.follow_up_date && <p className="text-sm"><span className={`font-semibold ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>}
+                          </div>
+                        )
+                    }
 
-                    {/* Medication delivery — only after visit completed */}
-                    {isCompleted && a.delivery == null && !!a.medication && (
+                    {/* Medication delivery — virtual appointments only, after visit completed */}
+                    {isCompleted && a.type === "virtual" && a.delivery == null && !!a.medication && (
                       <div className="mt-4 p-4 rounded-xl bg-[#1a365d]/5 border border-[#1a365d]/10">
                         <p className="text-sm font-semibold text-[#1a365d] mb-2.5">How would you like your medication?</p>
                         <div className="flex gap-2 flex-wrap">
@@ -534,7 +549,7 @@ const PatientPortal = () => {
                       </div>
                     )}
 
-                    {a.delivery && !a.medication_received && (
+                    {a.type === "virtual" && a.delivery && !a.medication_received && (
                       <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-100 space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="text-sm flex items-center gap-2 text-emerald-700 font-semibold">
@@ -621,32 +636,53 @@ const PatientPortal = () => {
                     </div>
 
                     {/* Visit summary — read-only from Visit table */}
-                    {(a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.medication || a.follow_up_date) && (
-                      <div className={`p-4 rounded-xl border space-y-1.5 ${isVirtual ? "bg-blue-50/50 border-blue-100" : "bg-emerald-50/50 border-emerald-100"}`}>
-                        <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-2 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
-                          <ClipboardList className="h-3.5 w-3.5" /> Visit Summary
-                        </div>
-                        {a.examination && <p className="text-xs"><span className="font-semibold text-slate-700">Examination: </span><span className="text-slate-600">{a.examination}</span></p>}
-                        {a.history && <p className="text-xs"><span className="font-semibold text-slate-700">History: </span><span className="text-slate-600">{a.history}</span></p>}
-                        {a.diagnosis && <p className="text-xs"><span className="font-semibold text-slate-700">Diagnosis: </span><span className="text-slate-600">{a.diagnosis}</span></p>}
-                        {a.notes && <p className="text-xs"><span className="font-semibold text-slate-700">Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
-                        {a.health_education && <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
-                        {a.medication && <p className="text-xs"><span className="font-semibold text-slate-700">Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
-                        {a.delivery && (
-                          <p className="text-xs"><span className="font-semibold text-slate-700">{a.delivery === "collect" ? "Collection" : "Courier"}: </span>
-                          <span className="text-slate-600">{a.delivery_date || ""}{a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}</span></p>
-                        )}
-                        {a.follow_up_date && (
-                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 mt-1">
-                            <p className="text-xs"><span className="font-semibold text-slate-700">Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>
-                            <Button size="sm" className="bg-[#1a365d] text-white rounded-xl text-xs h-7 px-3 hover:bg-[#1a365d]/90"
-                              onClick={() => { setFollowUpOpen(a); setFollowUpTime("09:00"); }}>
-                              <RefreshCw className="h-3 w-3 mr-1" /> Book Follow-Up
-                            </Button>
+                    {a.status === "OutPatient"
+                      ? (a.diagnosis || a.notes || a.health_education || a.follow_up_date) && (
+                          <div className={`p-4 rounded-xl border space-y-1.5 ${isVirtual ? "bg-blue-50/50 border-blue-100" : "bg-emerald-50/50 border-emerald-100"}`}>
+                            <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-2 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
+                              <ClipboardList className="h-3.5 w-3.5" /> Visit Summary
+                            </div>
+                            {a.diagnosis && <p className="text-xs"><span className="font-semibold text-slate-700">Diagnosis: </span><span className="text-slate-600">{a.diagnosis}</span></p>}
+                            {a.notes && <p className="text-xs"><span className="font-semibold text-slate-700">Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
+                            {a.health_education && <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                            {a.follow_up_date && (
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 mt-1">
+                                <p className="text-xs"><span className="font-semibold text-slate-700">Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>
+                                <Button size="sm" className="bg-[#1a365d] text-white rounded-xl text-xs h-7 px-3 hover:bg-[#1a365d]/90"
+                                  onClick={() => { setFollowUpOpen(a); setFollowUpTime("09:00"); }}>
+                                  <RefreshCw className="h-3 w-3 mr-1" /> Book Follow-Up
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    )}
+                        )
+                      : (a.examination || a.history || a.diagnosis || a.notes || a.health_education || a.medication || a.follow_up_date) && (
+                          <div className={`p-4 rounded-xl border space-y-1.5 ${isVirtual ? "bg-blue-50/50 border-blue-100" : "bg-emerald-50/50 border-emerald-100"}`}>
+                            <div className={`text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 mb-2 ${isVirtual ? "text-blue-700" : "text-emerald-700"}`}>
+                              <ClipboardList className="h-3.5 w-3.5" /> Visit Summary
+                            </div>
+                            {a.examination && <p className="text-xs"><span className="font-semibold text-slate-700">Examination: </span><span className="text-slate-600">{a.examination}</span></p>}
+                            {a.history && <p className="text-xs"><span className="font-semibold text-slate-700">History: </span><span className="text-slate-600">{a.history}</span></p>}
+                            {a.diagnosis && <p className="text-xs"><span className="font-semibold text-slate-700">Diagnosis: </span><span className="text-slate-600">{a.diagnosis}</span></p>}
+                            {a.notes && <p className="text-xs"><span className="font-semibold text-slate-700">Treatment: </span><span className="text-slate-600">{a.notes}</span></p>}
+                            {a.health_education && <p className="text-xs"><span className="font-semibold text-slate-700">Health Education: </span><span className="text-slate-600">{a.health_education}</span></p>}
+                            {a.medication && <p className="text-xs"><span className="font-semibold text-slate-700">Medication: </span><span className="text-slate-600">{a.medication}</span></p>}
+                            {a.delivery && (
+                              <p className="text-xs"><span className="font-semibold text-slate-700">{a.delivery === "collect" ? "Collection" : "Courier"}: </span>
+                              <span className="text-slate-600">{a.delivery_date || ""}{a.delivery === "courier" && a.delivery_address ? ` · ${a.delivery_address}` : ""}</span></p>
+                            )}
+                            {a.follow_up_date && (
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 mt-1">
+                                <p className="text-xs"><span className="font-semibold text-slate-700">Follow-up: </span><span className="text-slate-600">{a.follow_up_date}</span></p>
+                                <Button size="sm" className="bg-[#1a365d] text-white rounded-xl text-xs h-7 px-3 hover:bg-[#1a365d]/90"
+                                  onClick={() => { setFollowUpOpen(a); setFollowUpTime("09:00"); }}>
+                                  <RefreshCw className="h-3 w-3 mr-1" /> Book Follow-Up
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )
+                    }
 
                     {a.rating != null && (
                       <div className="mt-3 flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
@@ -975,8 +1011,8 @@ const PatientPortal = () => {
               <Select value={slotId} onValueChange={setSlotId}>
                 <SelectTrigger className="mt-1 rounded-xl h-11"><SelectValue placeholder="Choose a slot" /></SelectTrigger>
                 <SelectContent>
-                  {slots.length === 0 && <div className="px-3 py-2 text-sm text-slate-400">No slots available yet</div>}
-                  {slots.map((s) => (
+                  {virtualSlots.length === 0 && <div className="px-3 py-2 text-sm text-slate-400">No virtual slots available yet</div>}
+                  {virtualSlots.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {new Date(s.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" })} · {s.start_time}–{s.end_time} · {s.nurse_name}
                     </SelectItem>
@@ -1019,37 +1055,44 @@ const PatientPortal = () => {
                 </Select>
               </div>
               <div>
-                <Label className="text-xs font-semibold uppercase text-slate-500">Nurse *</Label>
-                <Select value={icNurse} onValueChange={setIcNurse}>
-                  <SelectTrigger className="h-11 mt-1 rounded-xl"><SelectValue placeholder="Select nurse" /></SelectTrigger>
+                <Label className="text-xs font-semibold uppercase text-slate-500">Available In-Clinic Slot *</Label>
+                <Select value={icSlotId} onValueChange={setIcSlotId}>
+                  <SelectTrigger className="h-11 mt-1 rounded-xl"><SelectValue placeholder="Choose a slot" /></SelectTrigger>
                   <SelectContent>
-                    {nurses.length === 0 && <div className="px-3 py-2 text-sm text-slate-400">No nurses available</div>}
-                    {nurses.map((n) => <SelectItem key={n.id} value={n.id}>{n.name}{n.surname ? " " + n.surname : ""}</SelectItem>)}
+                    {inclinicSlots.length === 0 && <div className="px-3 py-2 text-sm text-slate-400">No in-clinic slots available yet</div>}
+                    {inclinicSlots.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {new Date(s.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "short", month: "short", day: "numeric" })} · {s.start_time}–{s.end_time} · {s.nurse_name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {selectedIcSlot && (
+                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                    <UserCheck className="h-3.5 w-3.5 text-[#1a365d]" /> Nurse: <span className="font-semibold text-[#1a365d] ml-1">{selectedIcSlot.nurse_name}</span>
+                  </p>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-semibold uppercase text-slate-500">Date *</Label>
-                  <Input type="date" min={today} value={icDate} onChange={(e) => setIcDate(e.target.value)} className="mt-1 rounded-xl h-11" />
-                </div>
+              {icSlotId && (
                 <div>
                   <Label className="text-xs font-semibold uppercase text-slate-500">Time *</Label>
-                  <Input type="time" value={icTime} onChange={(e) => setIcTime(e.target.value)} className="mt-1 rounded-xl h-11" min="07:00" max="17:00" />
+                  <Input type="time" value={icTime} onChange={(e) => setIcTime(e.target.value)} className="mt-1 rounded-xl h-11"
+                    min={selectedIcSlot?.start_time} max={selectedIcSlot?.end_time} />
+                  <p className="text-xs text-slate-400 mt-1">Window: {selectedIcSlot?.start_time} – {selectedIcSlot?.end_time}</p>
                 </div>
-              </div>
+              )}
               <label className="flex items-center gap-2 p-3 rounded-xl bg-[#fbbf24]/10 border border-[#fbbf24]/30 cursor-pointer">
                 <input type="checkbox" checked={icStudent} onChange={(e) => setIcStudent(e.target.checked)} className="h-4 w-4 accent-[#1a365d]" />
                 <span className="text-sm font-medium text-[#1a365d]">Student — R50 flat rate on clinical services</span>
               </label>
-              {icServiceData && (
+              {icServiceData && selectedIcSlot && (
                 <div className="p-4 rounded-2xl bg-[#1a365d] text-white">
                   <div className="text-xs text-blue-200 font-semibold uppercase mb-1">Price Summary</div>
                   <div className="text-3xl font-black">R{icPrice}</div>
-                  {icDate && icTime && (
+                  {icTime && (
                     <div className="text-blue-200 text-sm mt-1 flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
-                      {new Date(icDate + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })} at {icTime}
+                      {new Date(selectedIcSlot.date + "T12:00:00").toLocaleDateString("en-ZA", { weekday: "long", month: "long", day: "numeric" })} at {icTime}
                     </div>
                   )}
                   {icStudent && <div className="text-[#fbbf24] text-xs font-semibold mt-1">Student discount applied</div>}

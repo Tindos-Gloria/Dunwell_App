@@ -73,6 +73,7 @@ export interface NurseSlot {
   date: string;
   start_time: string;
   end_time: string;
+  slot_type?: "virtual" | "inclinic";
 }
 
 export type MedicalDocType = "sick_note" | "prescription" | "referral";

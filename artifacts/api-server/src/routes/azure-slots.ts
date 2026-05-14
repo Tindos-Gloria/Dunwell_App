@@ -11,7 +11,17 @@ const mapSlot = (r: Record<string, unknown>) => ({
   date: r["SlotDate"] ? new Date(r["SlotDate"] as string).toISOString().slice(0, 10) : "",
   start_time: String(r["StartTime"] ?? "09:00"),
   end_time: String(r["EndTime"] ?? "17:00"),
+  slot_type: (r["SlotType"] as string) === "inclinic" ? "inclinic" : "virtual",
 });
+
+let slotColumnsChecked = false;
+async function ensureSlotColumns(pool: Awaited<ReturnType<typeof getPool>>) {
+  if (slotColumnsChecked) return;
+  slotColumnsChecked = true;
+  try {
+    await pool.request().query("ALTER TABLE NurseSlots ADD SlotType NVARCHAR(20) DEFAULT 'virtual'");
+  } catch { /* column already exists */ }
+}
 
 // GET /slots — any authenticated user (patients need this for virtual booking)
 router.get("/", async (req, res) => {
@@ -19,6 +29,7 @@ router.get("/", async (req, res) => {
   try {
     // Try Azure SQL first
     const pool = await getPool();
+    await ensureSlotColumns(pool);
     const request = pool.request();
     let query = "SELECT * FROM NurseSlots";
     if (nurseId) {
@@ -51,17 +62,20 @@ router.get("/", async (req, res) => {
 
 // POST /slots — nurse only
 router.post("/", requireNurse, async (req, res) => {
-  const { nurse_id, nurse_name, date, start_time, end_time } = req.body as Record<string, string>;
+  const { nurse_id, nurse_name, date, start_time, end_time, slot_type } = req.body as Record<string, string>;
   try {
     // Try Azure SQL first
     const pool = await getPool();
+    await ensureSlotColumns(pool);
+    const slotTypeVal = slot_type === "inclinic" ? "inclinic" : "virtual";
     const result = await pool.request()
       .input("nurseId", sql.Int, Number(nurse_id))
       .input("nurseName", sql.NVarChar(100), nurse_name || "")
       .input("slotDate", sql.Date, new Date(date + "T12:00:00"))
       .input("startTime", sql.NVarChar(10), start_time || "09:00")
       .input("endTime", sql.NVarChar(10), end_time || "17:00")
-      .query("INSERT INTO NurseSlots (NurseID, NurseName, SlotDate, StartTime, EndTime) OUTPUT INSERTED.* VALUES (@nurseId, @nurseName, @slotDate, @startTime, @endTime)");
+      .input("slotType", sql.NVarChar(20), slotTypeVal)
+      .query("INSERT INTO NurseSlots (NurseID, NurseName, SlotDate, StartTime, EndTime, SlotType) OUTPUT INSERTED.* VALUES (@nurseId, @nurseName, @slotDate, @startTime, @endTime, @slotType)");
     const r = result.recordset[0] as Record<string, unknown>;
     return res.status(201).json(mapSlot(r));
   } catch {
