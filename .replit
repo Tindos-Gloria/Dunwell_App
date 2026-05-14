@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -93,3 +93,6 @@ DB_DATABASE = "Dunwell_Clinic"
 DB_USER = "dunwell"
 DB_ENCRYPT = "true"
 DB_TRUST_SERVER_CERTIFICATE = "false"
+
+[nix]
+channel = "stable-25_05"
