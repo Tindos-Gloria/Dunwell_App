@@ -77,6 +77,7 @@ async function ensureVisitColumns(pool: Awaited<ReturnType<typeof getPool>>) {
     "ALTER TABLE Visit ADD Delivery_Address NVARCHAR(500)",
     "ALTER TABLE Visit ADD Medication_Received BIT DEFAULT 0",
     "ALTER TABLE Appointments ADD Booking_Type NVARCHAR(50)",
+    "ALTER TABLE Appointments ADD ZoomLink NVARCHAR(500)",
   ];
   for (const stmt of cols) {
     try { await pool.request().query(stmt); } catch { /* column already exists */ }

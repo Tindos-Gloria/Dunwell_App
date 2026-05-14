@@ -408,7 +408,7 @@ const PatientPortal = () => {
                             <CreditCard className="h-3.5 w-3.5 mr-1" /> Pay R{a.price}
                           </Button>
                         )}
-                        {a.zoom_link && a.status === "confirmed" && (
+                        {a.zoom_link && (
                           <Button size="sm" className="bg-[#1a365d] text-white hover:bg-[#1a365d]/90 rounded-xl font-semibold" asChild>
                             <a href={a.zoom_link} target="_blank" rel="noreferrer"><Video className="h-3.5 w-3.5 mr-1" /> Join Zoom</a>
                           </Button>
@@ -485,7 +485,7 @@ const PatientPortal = () => {
                             <CreditCard className="h-3.5 w-3.5 mr-1" /> Pay R{a.price}
                           </Button>
                         )}
-                        {a.zoom_link && a.status === "confirmed" && (
+                        {a.zoom_link && (
                           <Button size="sm" className="bg-[#1a365d] text-white hover:bg-[#1a365d]/90 rounded-xl font-semibold" asChild>
                             <a href={a.zoom_link} target="_blank" rel="noreferrer"><Video className="h-3.5 w-3.5 mr-1" /> Join Zoom</a>
                           </Button>
